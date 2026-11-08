@@ -22,6 +22,15 @@ import java.util.Locale
  */
 class BitMusicApplication : Application() {
     override fun onCreate() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            runCatching {
+                filesDir.resolve("crash_last.txt").writeText(
+                    "thread=${thread.name}\n${android.util.Log.getStackTraceString(throwable)}",
+                )
+            }
+            previous?.uncaughtException(thread, throwable)
+        }
         super.onCreate()
         AndroidPlatform.init(this)
     }
@@ -49,7 +58,7 @@ object AndroidPlatform {
             filesDir = application.filesDir,
             store = SharedPreferencesConfigStore(preferences),
             poTokenProvider = null,
-            prewarm = true,
+            prewarm = false,
         )
 
         PlayerPlatform.install(AndroidPlayerHost(application))
