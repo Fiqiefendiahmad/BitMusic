@@ -63,6 +63,7 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeDown
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -895,32 +896,31 @@ private fun OutputPartyPill(
     onOpenMembers: () -> Unit,
 ) {
     val badge = rememberPartyBadge()
+    val showShare = !badge.supported && !badge.inParty
+    val showOutputPicker = PlayerPlatform.host.audioOutputPickerAvailable
     Pill {
+        if (showOutputPicker) {
+            PillSegment(
+                icon = Icons.Rounded.Headphones,
+                iconSize = PILL_HEADPHONES_SIZE,
+                contentDescription = stringResource(Res.string.audio_output),
+                onClick = onOutput,
+            )
+            PillDivider()
+        }
         PillSegment(
-            icon = Icons.Rounded.Headphones,
-            iconSize = PILL_HEADPHONES_SIZE,
-            contentDescription = stringResource(Res.string.audio_output),
-            onClick = onOutput,
-        )
-        PillDivider()
-        PillSegment(
-            // Person rather than Groups: the three-person glyph is drawn half
-            // the height of Headphones and wider than the segment holding it,
-            // so the two halves of the capsule never looked like a pair.
-            icon = Icons.Rounded.Person,
-            iconSize = PILL_PARTY_SIZE,
-            // The count is here and nowhere else: spoken, it is the whole
-            // point of the control; drawn, it would cost the capsule its
-            // symmetry for something the caption below already implies.
-            contentDescription = if (badge.inParty) {
-                stringResource(Res.string.listen_together_open_count, badge.members)
-            } else {
-                stringResource(Res.string.listen_together_open)
+            icon = if (showShare) Icons.Rounded.Share else Icons.Rounded.Person,
+            iconSize = if (showShare) PILL_ICON_SIZE else PILL_PARTY_SIZE,
+            contentDescription = when {
+                showShare -> "Share"
+                badge.inParty -> stringResource(Res.string.listen_together_open_count, badge.members)
+                else -> stringResource(Res.string.listen_together_open)
             },
-            // Already in a party, this opens who's in it rather than the
-            // settings page directly; there is nothing to create or join once
-            // there is a party, so [onParty] only ever fires beforehand.
-            onClick = if (badge.inParty) onOpenMembers else onParty,
+            onClick = when {
+                badge.inParty -> onOpenMembers
+                showShare -> onParty
+                else -> onParty
+            },
             highlighted = badge.inParty,
             trailingLabel = badge.members.takeIf { badge.inParty }?.toString(),
         )
@@ -1068,9 +1068,12 @@ internal fun OutputCaption(
     val jamName = badge.hostFirstName
         ?.let { stringResource(Res.string.listen_together_jam, it) }
         ?: stringResource(Res.string.listen_together_jam_unnamed)
+    val outputPickerAvailable = PlayerPlatform.host.audioOutputPickerAvailable
     val captionModifier = Modifier
         .fillMaxWidth(0.65f)
-        .clickable { if (badge.inParty) onOpenMembers() else onOpenOutput() }
+        .clickable(enabled = badge.inParty || outputPickerAvailable) {
+            if (badge.inParty) onOpenMembers() else onOpenOutput()
+        }
     if (!badge.inParty && isHiResOutput) {
         ShimmerText(
             text = outputName,
@@ -1094,11 +1097,12 @@ internal fun OutputCaption(
     }
 }
 
-/** The three fields of a party the player draws — see [OutputPartyPill]. */
+/** The fields of a party the player draws — see [OutputPartyPill]. */
 private data class PartyBadge(
     val inParty: Boolean,
     val members: Int,
     val hostFirstName: String?,
+    val supported: Boolean,
 )
 
 private fun PartyUi.badge(): PartyBadge = PartyBadge(
@@ -1110,6 +1114,7 @@ private fun PartyUi.badge(): PartyBadge = PartyBadge(
         ?.split(Regex("\\s+"))
         ?.firstOrNull()
         ?.takeIf { it.isNotBlank() },
+    supported = supported,
 )
 
 /**

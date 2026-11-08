@@ -7,15 +7,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.music.bitchord.android.auth.AndroidYouTubeAuth
 import com.music.bitchord.android.data.Collection
 import com.music.bitchord.android.data.MusicRepository
 import com.music.bitchord.android.data.playableSongs
 import com.music.bitchord.android.data.toSong
 import com.music.bitchord.android.playback.AndroidPlaybackController
+import com.music.bitchord.data.LikeState
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsRepository
 import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.model.LikeStatus
+import com.music.bitchord.data.model.SearchFilter
+import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.UiState
@@ -23,6 +28,7 @@ import com.music.bitchord.playback.PlaybackPosition
 import com.music.bitchord.ui.LyricsProviderState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -39,7 +45,7 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
     private var lyricsJob: Job? = null
 
     private val playback = AndroidPlaybackController(
-        context = application,
+        appContext = application,
         onPlayingChanged = { isPlaying = it },
         onBufferingChanged = { isBuffering = it },
         onEnded = { skipNext(auto = true) },
@@ -47,6 +53,8 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
             playbackError = message
             isBuffering = false
         },
+        onSkipNext = { skipNext() },
+        onSkipPrevious = { skipPrevious() },
     )
 
     var homeState by mutableStateOf<UiState<List<HomeShelf>>>(UiState.Loading)
@@ -72,10 +80,21 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
 
     var libraryTracks by mutableStateOf<List<Song>>(emptyList())
         private set
-    var searchResults by mutableStateOf<List<Song>>(emptyList())
+    var searchResults by mutableStateOf<List<SearchResult>>(emptyList())
+        private set
+    var searchSuggestions by mutableStateOf<List<Song>>(emptyList())
+        private set
+    var searchFilter by mutableStateOf(SearchFilter.SONGS)
         private set
     var searchQuery by mutableStateOf("")
         private set
+    var likeOverrides by mutableStateOf<Map<String, LikeStatus>>(emptyMap())
+        private set
+
+    fun likeStatus(song: Song?): LikeStatus {
+        val id = song?.videoId ?: return LikeStatus.INDIFFERENT
+        return likeOverrides[id] ?: LikeStatus.INDIFFERENT
+    }
     var isLoadingHome by mutableStateOf(true)
         private set
     var isLoadingLibrary by mutableStateOf(true)
@@ -146,6 +165,15 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
     init {
         refreshHome()
         refreshLibrary()
+        refreshSuggestions()
+        viewModelScope.launch { LikeState.overrides.collectLatest { likeOverrides = it } }
+        viewModelScope.launch {
+            AndroidYouTubeAuth.cookie.collectLatest {
+                refreshLibrary()
+                refreshHome()
+                refreshSuggestions()
+            }
+        }
         viewModelScope.launch {
             while (isActive) {
                 if (playback.isPlaying) {
@@ -158,6 +186,20 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
                 }
                 delay(PROGRESS_TICK_MS)
             }
+        }
+    }
+
+    fun toggleLikeCurrent() {
+        val song = current ?: return
+        val previous = repository.likeStatus(song)
+        val target = if (previous == LikeStatus.LIKE) LikeStatus.INDIFFERENT else LikeStatus.LIKE
+        LikeState.set(song.videoId, target) // optimistic: update UI immediately
+        viewModelScope.launch {
+            com.music.bitchord.data.YtMusicRepository.rate(song.videoId, target)
+                .onFailure { e ->
+                    LikeState.set(song.videoId, previous)
+                    playbackError = e.message ?: "Couldn’t update like"
+                }
         }
     }
 
@@ -211,14 +253,14 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun openCollection(browseId: String, title: String) {
+    fun openCollection(browseId: String, title: String, type: String? = null) {
         viewModelScope.launch {
             collection = null
             collectionTitle = title
             collectionBrowseId = browseId
             collectionError = null
             collectionLoading = true
-            repository.browse(browseId, title)
+            repository.browse(browseId, title, type)
                 .onSuccess {
                     collection = it
                     collectionTitle = it.title
@@ -255,6 +297,18 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun refreshSuggestions() {
+        viewModelScope.launch {
+            searchSuggestions = repository.suggestions(limit = 30)
+        }
+    }
+
+    fun onSearchFilterChange(filter: SearchFilter) {
+        if (searchFilter == filter) return
+        searchFilter = filter
+        if (searchQuery.isNotBlank()) runSearch(searchQuery, filter)
+    }
+
     fun onSearchQueryChange(value: String) {
         searchQuery = value
         searchJob?.cancel()
@@ -264,11 +318,15 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
             isSearching = false
             return
         }
+        runSearch(value, searchFilter)
+    }
+
+    private fun runSearch(query: String, filter: SearchFilter) {
         searchJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MS)
             isSearching = true
             searchError = null
-            repository.search(value)
+            repository.search(query, filter)
                 .onSuccess { searchResults = it }
                 .onFailure { searchError = it.message ?: "Search failed" }
             isSearching = false
@@ -453,7 +511,7 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
             repository.resolve(song)
                 .onSuccess { stream ->
                     if (current?.videoId == song.videoId) {
-                        playback.play(stream.url, stream.headers)
+                        playback.play(stream.url, stream.headers, song)
                         isResolving = false
                     }
                 }

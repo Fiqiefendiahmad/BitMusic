@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Palette
@@ -59,7 +60,7 @@ fun CompactProfileScreen(
         item {
             Surface(
                 onClick = onOpenPlayerSettings,
-                shape = MaterialTheme.shapes.medium,
+                shape = RoundedCornerShape(CompactDimens.CornerRadius),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 1.dp,
                 modifier = Modifier.fillMaxWidth(),
@@ -81,7 +82,7 @@ fun CompactProfileScreen(
         item {
             Surface(
                 onClick = onExportLogs,
-                shape = MaterialTheme.shapes.medium,
+                shape = RoundedCornerShape(CompactDimens.CornerRadius),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 1.dp,
                 modifier = Modifier.fillMaxWidth(),

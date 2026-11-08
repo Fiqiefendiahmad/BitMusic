@@ -116,7 +116,6 @@ internal fun TrackRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text("YouTube", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
             track.durationText?.let {
                 Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

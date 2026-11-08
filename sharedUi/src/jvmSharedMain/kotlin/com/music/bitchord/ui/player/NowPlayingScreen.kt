@@ -777,8 +777,10 @@ fun NowPlayingScreen(
     var showCast by remember { mutableStateOf(false) }
     var showAudioOutput by remember { mutableStateOf(false) }
     var showLyricsProviders by remember { mutableStateOf(false) }
+    val audioPickerAvailable = PlayerPlatform.host.audioOutputPickerAvailable
     // Gated on the Bluetooth permission the first time — see [rememberOutputPicker].
-    val openAudioOutput = rememberOutputPicker { showAudioOutput = true }
+    val rawOpenAudioOutput = rememberOutputPicker { showAudioOutput = true }
+    val openAudioOutput = if (audioPickerAvailable) rawOpenAudioOutput else ({ })
     // Listening in a party whose host has taken the controls: the transport
     // keeps only play/pause, which from here moves this device alone.
     val controlsLocked = rememberControlsLocked()
@@ -1021,7 +1023,7 @@ fun NowPlayingScreen(
     // drawer, so it is always the topmost of the two when both are up, and
     // back has to close it first rather than taking the drawer out from
     // under it.
-    PlayerBackHandler(enabled = showAudioOutput) { showAudioOutput = false }
+    PlayerBackHandler(enabled = audioPickerAvailable && showAudioOutput) { showAudioOutput = false }
 
     PlayerBackHandler(enabled = showLyricsProviders) { showLyricsProviders = false }
 
@@ -1522,7 +1524,7 @@ fun NowPlayingScreen(
     // whichever layout is on screen — they are overlays over the player, not
     // part of either shape of it.
     val playerOverlays: @Composable () -> Unit = {
-        if (showAudioOutput) {
+        if (audioPickerAvailable && showAudioOutput) {
             AudioOutputSheet(
                 hazeState = playerHaze,
                 accountName = accountName,
@@ -3296,33 +3298,28 @@ fun NowPlayingScreen(
                             // whichever way the controls are.
                             val lyricsShareGlyphVisible = lyricsOpen && collapseDone && lyricsShareEnabled &&
                                 !lyrics.isNullOrEmpty() && (!lyricsControlsOpen || lyricPicker.picking)
-                            CircleGlyph(
-                                icon = when {
-                                    showRevertCue -> Icons.AutoMirrored.Rounded.Undo
-                                    lyricsShareGlyphVisible && lyricPicker.picking -> Icons.Rounded.Close
-                                    lyricsShareGlyphVisible -> Icons.Rounded.IosShare
-                                    else -> Icons.Rounded.MoreHoriz
-                                },
-                                contentDescription = stringResource(
-                                    when {
-                                        showRevertCue -> Res.string.more
-                                        lyricsShareGlyphVisible && lyricPicker.picking -> Res.string.cancel
-                                        lyricsShareGlyphVisible -> Res.string.share
-                                        else -> Res.string.more
+                            if (showRevertCue || lyricsShareGlyphVisible) {
+                                CircleGlyph(
+                                    icon = when {
+                                        showRevertCue -> Icons.AutoMirrored.Rounded.Undo
+                                        lyricPicker.picking -> Icons.Rounded.Close
+                                        else -> Icons.Rounded.IosShare
                                     },
-                                ),
-                                onClick = when {
-                                    showRevertCue -> onOpenMenu
-                                    lyricsShareGlyphVisible && lyricPicker.picking -> lyricPicker.cancel
-                                    lyricsShareGlyphVisible -> lyricPicker.beginPicking
-                                    else -> onOpenMenu
-                                },
-                                haptic = if (lyricsShareGlyphVisible && !showRevertCue) {
-                                    Haptic.Select
-                                } else {
-                                    Haptic.Tap
-                                },
-                            )
+                                    contentDescription = stringResource(
+                                        when {
+                                            showRevertCue -> Res.string.more
+                                            lyricPicker.picking -> Res.string.cancel
+                                            else -> Res.string.share
+                                        },
+                                    ),
+                                    onClick = when {
+                                        showRevertCue -> onOpenMenu
+                                        lyricPicker.picking -> lyricPicker.cancel
+                                        else -> lyricPicker.beginPicking
+                                    },
+                                    haptic = if (showRevertCue) Haptic.Tap else Haptic.Select,
+                                )
+                            }
                         }
 
                         // [lyricsOpen] asked first: a close has already hidden the

@@ -1,93 +1,86 @@
 package com.music.bitchord.android.playback
 
 import android.content.Context
-import androidx.media3.common.AudioAttributes
+import android.content.Intent
+import android.net.Uri
+import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import com.music.bitchord.data.model.Song
 
 /**
- * ExoPlayer bound to the URL and headers produced by the shared
- * [com.music.bitchord.data.innertube.StreamResolver].
- *
- * The data-source factory is reused between tracks; its default request
- * properties are replaced with the headers of the client that minted the
- * current URL before each prepare.
+ * Controls the shared [PlaybackHolder] ExoPlayer/MediaSession. Metadata is
+ * published to the session for notification and lock-screen controls.
  */
 class AndroidPlaybackController(
-    context: Context,
+    private val appContext: Context,
     private val onPlayingChanged: (Boolean) -> Unit,
     private val onBufferingChanged: (Boolean) -> Unit,
     private val onEnded: () -> Unit,
     private val onError: (String) -> Unit,
+    private val onSkipNext: (() -> Unit)? = null,
+    private val onSkipPrevious: (() -> Unit)? = null,
 ) {
-    private val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-        // The resolver's per-client User-Agent must survive; ExoPlayer's own
-        // default would overwrite it and the CDN would answer 403.
-        .setUserAgent(null)
-        .setAllowCrossProtocolRedirects(true)
-        .setConnectTimeoutMs(15_000)
-        .setReadTimeoutMs(30_000)
+    init {
+        PlaybackHolder.ensure(appContext)
+        PlaybackHolder.setTransportHandlers(onSkipNext, onSkipPrevious)
+        PlaybackHolder.player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                onPlayingChanged(isPlaying)
+            }
 
-    val player: ExoPlayer = ExoPlayer.Builder(context)
-        .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory))
-        .setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(C.USAGE_MEDIA)
-                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                .build(),
-            /* handleAudioFocus = */ true,
-        )
-        .setHandleAudioBecomingNoisy(true)
-        .build()
-        .apply {
-            addListener(object : Player.Listener {
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    onPlayingChanged(isPlaying)
-                }
-
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    when (playbackState) {
-                        Player.STATE_BUFFERING -> onBufferingChanged(true)
-                        Player.STATE_READY -> onBufferingChanged(false)
-                        Player.STATE_ENDED -> {
-                            onBufferingChanged(false)
-                            onEnded()
-                        }
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_BUFFERING -> onBufferingChanged(true)
+                    Player.STATE_READY -> onBufferingChanged(false)
+                    Player.STATE_ENDED -> {
+                        onBufferingChanged(false)
+                        onEnded()
                     }
+                    Player.STATE_IDLE -> onBufferingChanged(false)
                 }
+            }
 
-                override fun onPlayerError(error: PlaybackException) {
-                    onBufferingChanged(false)
-                    onError(error.message ?: "Playback failed")
-                }
-            })
-        }
+            override fun onPlayerError(error: PlaybackException) {
+                onBufferingChanged(false)
+                onError(error.message ?: "Playback failed")
+            }
+        })
+    }
 
-    val isPlaying: Boolean
-        get() = player.isPlaying
+    val player get() = PlaybackHolder.player
 
-    val positionMs: Long
-        get() = player.currentPosition.coerceAtLeast(0)
-
+    val isPlaying: Boolean get() = player.isPlaying
+    val positionMs: Long get() = player.currentPosition.coerceAtLeast(0)
     val durationMs: Long
         get() = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0
 
-    fun play(url: String, headers: Map<String, String>) {
-        httpDataSourceFactory.setDefaultRequestProperties(headers)
-        player.setMediaItem(MediaItem.fromUri(url))
+    fun play(url: String, headers: Map<String, String>, song: Song? = null) {
+        ensureService()
+        PlaybackHolder.dataSourceFactory.setDefaultRequestProperties(headers)
+        val meta = MediaMetadata.Builder()
+            .setTitle(song?.title ?: "Unknown title")
+            .setArtist(song?.artist)
+            .setArtworkUri(song?.thumbnailUrl?.let { Uri.parse(it) })
+            .build()
+        val item = MediaItem.Builder()
+            .setUri(url)
+            .setMediaId(song?.videoId ?: url)
+            .setMediaMetadata(meta)
+            .build()
+        player.setMediaItem(item)
         player.prepare()
         player.play()
     }
 
     fun pause() = player.pause()
-
-    fun resume() = player.play()
-
+    fun resume() {
+        ensureService()
+        player.play()
+    }
     fun seekTo(positionMs: Long) = player.seekTo(positionMs.coerceAtLeast(0))
 
     fun stop() {
@@ -95,5 +88,12 @@ class AndroidPlaybackController(
         player.clearMediaItems()
     }
 
-    fun release() = player.release()
+    fun release() {
+        // Shared holder is released by app/service lifecycle; do not release here.
+    }
+
+    private fun ensureService() {
+        val intent = Intent(appContext, PlaybackService::class.java)
+        ContextCompat.startForegroundService(appContext, intent)
+    }
 }

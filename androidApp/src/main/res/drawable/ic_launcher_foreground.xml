@@ -3,9 +3,7 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#1DB954"
-        android:pathData="M54,18a36,36 0,1 0,0 72a36,36 0,1 0,0 -72z" />
+    <!-- Foreground symbol only; background is provided by the adaptive icon layer. -->
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M44,38v32l26,-16z" />

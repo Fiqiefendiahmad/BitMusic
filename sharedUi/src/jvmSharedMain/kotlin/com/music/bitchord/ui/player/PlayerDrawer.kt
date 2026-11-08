@@ -194,8 +194,8 @@ fun PlayerDrawer(
     ) {
         AnimatedVisibility(
             visible = shown,
-            enter = slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it },
-            exit = slideOutVertically(tween(180)) { it },
+            enter = slideInVertically(tween(200, easing = FastOutSlowInEasing)) { it },
+            exit = slideOutVertically(tween(140)) { it },
         ) {
         Column(
             modifier = Modifier

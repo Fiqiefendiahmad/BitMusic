@@ -62,6 +62,9 @@ interface PlayerHost {
     @Composable
     fun rememberOutputPicker(onOpen: () -> Unit): () -> Unit
 
+    /** Whether the in-app audio output picker/sheet is available and useful. */
+    val audioOutputPickerAvailable: Boolean get() = true
+
     fun selectAudioOutput(id: Int?)
 
     /** The negotiated output format, as the pipeline row and the hi-res shine read it. */
@@ -241,6 +244,8 @@ data class PartyUi(
     val members: List<PartyMember> = emptyList(),
     val you: PartyMember? = null,
     val code: String? = null,
+    /** False on platforms that don't implement Listen Together; the player shows Share instead. */
+    val supported: Boolean = true,
 )
 
 sealed interface LyricsTranslationResult {

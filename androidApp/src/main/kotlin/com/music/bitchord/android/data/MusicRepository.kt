@@ -1,10 +1,13 @@
 package com.music.bitchord.android.data
 
+import com.music.bitchord.data.LikeState
 import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.data.model.HomeFeed
 import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.model.SearchFilter
+import com.music.bitchord.data.YtMusicRepository.SearchPage
 import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
@@ -35,30 +38,61 @@ class MusicRepository {
 
     suspend fun moreHome(token: String): Result<HomeFeed> = YtMusicRepository.moreHome(token)
 
-    suspend fun browse(browseId: String, fallbackTitle: String): Result<Collection> =
-        YtMusicRepository.browseSongs(browseId).map { page ->
+    suspend fun browse(
+        browseId: String,
+        fallbackTitle: String,
+        type: String? = null,
+    ): Result<Collection> {
+        val artistLike = type.equals("ARTIST", ignoreCase = true) || browseId.startsWith("UC")
+        if (artistLike) {
+            YtMusicRepository.artistPage(browseId).onSuccess { page ->
+                return Result.success(
+                    Collection(
+                        title = page.name?.takeIf(String::isNotBlank) ?: fallbackTitle,
+                        songs = page.songs.distinctBy { it.videoId },
+                        continuation = null,
+                    ),
+                )
+            }
+            // Fall through to browseSongs if artist endpoint fails for this id.
+        }
+        return YtMusicRepository.browseSongs(browseId).map { page ->
             Collection(
                 title = page.header?.title?.takeIf(String::isNotBlank) ?: fallbackTitle,
                 songs = page.songs,
                 continuation = page.continuation,
             )
         }
+    }
 
     suspend fun library(): Result<List<Song>> =
         YtMusicRepository.library().map { page ->
             (page.likedSongs + page.librarySongs).distinctBy { it.videoId }
         }
 
-    suspend fun search(query: String): Result<List<Song>> =
-        YtMusicRepository.search(query, SearchFilter.SONGS).map { results ->
-            results.mapNotNull { result ->
-                when (result) {
-                    is SearchResult.Track -> result.song
-                    is SearchResult.TopTrack -> result.song
-                    is SearchResult.Browse -> null
-                }
-            }
-        }
+    suspend fun search(query: String, filter: SearchFilter = SearchFilter.SONGS): Result<List<SearchResult>> =
+        YtMusicRepository.search(query, filter)
+
+    suspend fun searchPage(query: String, filter: SearchFilter = SearchFilter.SONGS): Result<SearchPage> =
+        YtMusicRepository.searchPage(query, filter)
+
+    fun likeStatus(song: Song): LikeStatus =
+        LikeState.overrides.value[song.videoId] ?: LikeStatus.INDIFFERENT
+
+    suspend fun toggleLike(song: Song): Result<LikeStatus> = runCatching {
+        val current = this.likeStatus(song)
+        val next = if (current == LikeStatus.LIKE) LikeStatus.INDIFFERENT else LikeStatus.LIKE
+        YtMusicRepository.rate(song.videoId, next).getOrThrow()
+        LikeState.set(song.videoId, next)
+        next
+    }
+
+    /** Listening suggestions for search discovery: history, then library, then home picks. */
+    suspend fun suggestions(limit: Int = 30): List<Song> {
+        YtMusicRepository.history().getOrNull()?.take(limit)?.takeIf { it.isNotEmpty() }?.let { return it }
+        library().getOrNull()?.take(limit)?.takeIf { it.isNotEmpty() }?.let { return it }
+        return home().getOrNull()?.shelves?.playableSongs().orEmpty().take(limit)
+    }
 
     suspend fun resolve(song: Song): Result<ResolvedStream> = runCatching {
         val url = StreamResolver.resolve(song.videoId)

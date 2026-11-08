@@ -7,6 +7,7 @@ import com.music.bitchord.data.DebugLog
 import com.music.bitchord.data.innertube.Innertube
 import com.music.bitchord.data.innertube.InnerTubeXResolver
 import com.music.bitchord.data.innertube.StreamResolver
+import com.music.bitchord.android.auth.AndroidYouTubeAuth
 import com.music.bitchord.android.playback.AndroidPlayerHost
 import com.music.bitchord.ui.AppUi
 import com.music.bitchord.ui.player.PlayerPlatform
@@ -54,6 +55,7 @@ object AndroidPlatform {
 
         Innertube.appLanguage = { Locale.getDefault().toLanguageTag() }
         StreamResolver.maxKbps = { preferences.getInt(KEY_MAX_KBPS, Int.MAX_VALUE) }
+        AndroidYouTubeAuth.restore(application)
 
         InnerTubeXResolver.init(
             filesDir = application.filesDir,

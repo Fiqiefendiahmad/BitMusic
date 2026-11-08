@@ -39,7 +39,11 @@ fun PlayerSettingsSheet(onDismiss: () -> Unit) {
     val haze = remember { HazeState() }
     PlayerDrawer(hazeState = haze, title = "Settings", onDismiss = onDismiss) {
         if (settings == null) {
-            Text("Settings are unavailable.", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Settings are unavailable.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
             return@PlayerDrawer
         }
 
@@ -57,18 +61,14 @@ fun PlayerSettingsSheet(onDismiss: () -> Unit) {
         val animatedCanvas by settings.animatedCanvas.collectAsState()
 
         SectionLabel("Audio quality")
-        QualityRow(
-            title = "Data saver",
-            detail = "~64 kbps · smallest stream",
-            selected = quality == AudioQuality.LOW,
-            onClick = { settings.setAudioQuality(AudioQuality.LOW) },
-        )
-        QualityRow(
-            title = "Best available",
-            detail = "Highest progressive stream · ~256 kbps",
-            selected = quality != AudioQuality.LOW,
-            onClick = { settings.setAudioQuality(AudioQuality.HIGH) },
-        )
+        val highQuality = quality != AudioQuality.LOW
+        SettingSwitch(
+            "High quality audio",
+            if (highQuality) "Best available stream" else "Data saver · smaller stream",
+            highQuality,
+        ) { enabled ->
+            settings.setAudioQuality(if (enabled) AudioQuality.HIGH else AudioQuality.LOW)
+        }
 
         Divider()
         SectionLabel("Player")

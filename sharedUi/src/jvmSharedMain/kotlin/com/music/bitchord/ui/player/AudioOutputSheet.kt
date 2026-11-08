@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -44,7 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +58,31 @@ import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.roundToInt
+
+@Composable
+private fun rowContainerColor(active: Boolean) =
+    if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+    else MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+
+@Composable
+private fun rowBorderColor(active: Boolean) =
+    if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+    else MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+
+@Composable
+private fun rowIconBg(active: Boolean) =
+    if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)
+
+@Composable
+private fun rowPrimaryText(active: Boolean = false) = MaterialTheme.colorScheme.onSurface
+
+@Composable
+private fun rowSecondaryText() = MaterialTheme.colorScheme.onSurfaceVariant
+
+@Composable
+private fun rowIconTint(active: Boolean) =
+    if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
 
 /**
  * Where the music is coming out, and how loud.
@@ -98,14 +123,12 @@ internal fun AudioOutputSheet(
         title = stringResource(Res.string.audio_output),
         onDismiss = onDismiss,
         modifier = modifier,
+        titleGap = 10.dp,
     ) {
-        // Flat, with the playing one marked, rather than folded behind a
-        // chevron. There are two outputs on a phone most of the time; one
-        // of them is the answer and the other is the only alternative, so a
-        // disclosure control costs a tap to reveal a single row.
+        SectionLabel("Devices")
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             outputs.forEach { device ->
                 OutputRow(
@@ -114,22 +137,59 @@ internal fun AudioOutputSheet(
                     onSelect = { PlayerPlatform.host.selectAudioOutput(device.id) },
                 )
             }
-            // One more place to send the music, listed with the others. The
-            // receivers behind it are chosen in a popup of their own — there
-            // can be any number of them, and they come and go while it is open.
-            // The watch, when one with BitChord on it is in reach: picked
-            // directly, since there is only ever the one.
+            if (outputs.isEmpty()) {
+                EmptyOutputsHint()
+            }
             if (watch.available || watch.active) {
                 WatchRow(watch = watch, onClick = { PlayerPlatform.host.selectWatchOutput() })
             }
             if (cast.supported) CastRow(cast = cast, onClick = onOpenCast)
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(14.dp))
+        SectionLabel("Volume")
         VolumeRow(routeKey = outputs)
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(14.dp))
+        SectionLabel("Audio")
         AudioPipelineRow(onClick = onOpenPipeline)
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun EmptyOutputsHint() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(ROW_SHAPE)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f), ROW_SHAPE)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Speaker,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = "No output devices available",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -149,7 +209,8 @@ private fun AudioPipelineRow(onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(ROW_SHAPE)
-            .background(Color.White.copy(alpha = 0.05f))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f), ROW_SHAPE)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -157,20 +218,20 @@ private fun AudioPipelineRow(onClick: () -> Unit) {
                 haptics.play(Haptic.Select)
                 onClick()
             }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(42.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.08f)),
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Rounded.GraphicEq,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.7f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -179,7 +240,7 @@ private fun AudioPipelineRow(onClick: () -> Unit) {
             Text(
                 text = stringResource(Res.string.audio_pipeline),
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.White.copy(alpha = 0.85f),
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -187,7 +248,7 @@ private fun AudioPipelineRow(onClick: () -> Unit) {
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.labelMedium,
-                color = Color.White.copy(alpha = 0.55f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -195,7 +256,7 @@ private fun AudioPipelineRow(onClick: () -> Unit) {
         Icon(
             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.35f),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             modifier = Modifier.size(20.dp),
         )
     }
@@ -214,7 +275,8 @@ private fun CastRow(cast: CastUi, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(ROW_SHAPE)
-            .background(Color.White.copy(alpha = if (casting) 0.10f else 0.05f))
+            .background(rowContainerColor(casting))
+            .border(1.dp, rowBorderColor(casting), ROW_SHAPE)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -229,13 +291,13 @@ private fun CastRow(cast: CastUi, onClick: () -> Unit) {
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = if (casting) 0.16f else 0.08f)),
+                .background(rowIconBg(casting)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = if (casting) Icons.Rounded.CastConnected else Icons.Rounded.Cast,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = if (casting) 1f else 0.7f),
+                tint = rowIconTint(casting),
                 modifier = Modifier.size(21.dp),
             )
         }
@@ -246,7 +308,7 @@ private fun CastRow(cast: CastUi, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = if (casting) FontWeight.SemiBold else FontWeight.Normal,
                 ),
-                color = Color.White.copy(alpha = if (casting) 1f else 0.85f),
+                color = rowPrimaryText(casting),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -260,7 +322,7 @@ private fun CastRow(cast: CastUi, onClick: () -> Unit) {
                     },
                 ),
                 style = MaterialTheme.typography.labelMedium,
-                color = Color.White.copy(alpha = 0.55f),
+                color = rowSecondaryText(),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -268,7 +330,7 @@ private fun CastRow(cast: CastUi, onClick: () -> Unit) {
         Icon(
             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.35f),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             modifier = Modifier.size(20.dp),
         )
     }
@@ -287,7 +349,8 @@ private fun WatchRow(watch: WatchOutputUi, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(ROW_SHAPE)
-            .background(Color.White.copy(alpha = if (active) 0.10f else 0.05f))
+            .background(rowContainerColor(active))
+            .border(1.dp, rowBorderColor(active), ROW_SHAPE)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -296,20 +359,20 @@ private fun WatchRow(watch: WatchOutputUi, onClick: () -> Unit) {
                 haptics.play(Haptic.Select)
                 onClick()
             }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(42.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = if (active) 0.16f else 0.08f)),
+                .background(rowIconBg(active)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Rounded.Watch,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = if (active) 1f else 0.7f),
+                tint = rowIconTint(active),
                 modifier = Modifier.size(21.dp),
             )
         }
@@ -320,7 +383,7 @@ private fun WatchRow(watch: WatchOutputUi, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                 ),
-                color = Color.White.copy(alpha = if (active) 1f else 0.85f),
+                color = rowPrimaryText(active),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -328,7 +391,7 @@ private fun WatchRow(watch: WatchOutputUi, onClick: () -> Unit) {
             Text(
                 text = stringResource(if (active) Res.string.audio_output_playing else Res.string.watch_output_subtitle),
                 style = MaterialTheme.typography.labelMedium,
-                color = Color.White.copy(alpha = 0.55f),
+                color = rowSecondaryText(),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -337,7 +400,7 @@ private fun WatchRow(watch: WatchOutputUi, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Rounded.Check,
                 contentDescription = null,
-                tint = Color.White,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -360,7 +423,8 @@ private fun OutputRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(ROW_SHAPE)
-            .background(Color.White.copy(alpha = if (active) 0.10f else 0.05f))
+            .background(rowContainerColor(active))
+            .border(1.dp, rowBorderColor(active), ROW_SHAPE)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -369,20 +433,20 @@ private fun OutputRow(
                 haptics.play(Haptic.Select)
                 onSelect()
             }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(42.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = if (active) 0.16f else 0.08f)),
+                .background(rowIconBg(active)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = iconFor(device.kind),
                 contentDescription = null,
-                tint = Color.White.copy(alpha = if (active) 1f else 0.7f),
+                tint = rowIconTint(active),
                 modifier = Modifier.size(21.dp),
             )
         }
@@ -391,26 +455,26 @@ private fun OutputRow(
             Text(
                 text = outputLabel(device, accountName),
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
                 ),
-                color = Color.White.copy(alpha = if (active) 1f else 0.85f),
+                color = rowPrimaryText(active),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (active) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = stringResource(Res.string.audio_output_playing),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.55f),
-                )
-            }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = if (active) stringResource(Res.string.audio_output_playing) else deviceLabel(device.kind),
+                style = MaterialTheme.typography.labelMedium,
+                color = if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.9f) else rowSecondaryText(),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         if (active) {
             Icon(
                 imageVector = Icons.Rounded.Check,
                 contentDescription = null,
-                tint = Color.White,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -456,14 +520,14 @@ private fun VolumeRow(routeKey: Any) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(ROW_SHAPE)
-            .background(Color.White.copy(alpha = 0.05f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = if (level > 0f) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff,
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.6f),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp),
         )
         Spacer(Modifier.width(12.dp))
@@ -489,6 +553,15 @@ private fun iconFor(kind: AudioOutputKind): ImageVector = when (kind) {
     AudioOutputKind.BLUETOOTH -> Icons.Rounded.Bluetooth
     AudioOutputKind.HDMI -> Icons.Rounded.Tv
     AudioOutputKind.OTHER -> Icons.Rounded.Speaker
+}
+
+private fun deviceLabel(kind: AudioOutputKind): String = when (kind) {
+    AudioOutputKind.PHONE -> "This device"
+    AudioOutputKind.WIRED -> "Wired headphones"
+    AudioOutputKind.USB -> "USB audio"
+    AudioOutputKind.BLUETOOTH -> "Bluetooth"
+    AudioOutputKind.HDMI -> "HDMI / TV"
+    AudioOutputKind.OTHER -> "Speaker"
 }
 
 /** How many times the level is re-read after a route change, and how far apart. */

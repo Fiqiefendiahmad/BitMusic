@@ -19,7 +19,7 @@ object CompactDimens {
     val SectionSpacing = 20.dp
     val MinTouchTarget = 48.dp
     val MiniPlayerHeight = 64.dp
-    val BottomNavHeight = 52.dp
+    val BottomNavHeight = 64.dp
     val ArtworkSmall = 44.dp
     val ArtworkMedium = 72.dp
     val ArtworkNowPlaying = 320.dp
@@ -61,14 +61,14 @@ private val BitDark = darkColorScheme(
 private val BitLight = lightColorScheme(
     primary = GuideAccent,
     onPrimary = GuideTextPrimary,
-    primaryContainer = Color(0xFFFFD9E2),
+    primaryContainer = Color(0xFFFFD9E2).copy(alpha = 0.72f),
     onPrimaryContainer = Color(0xFF3E001D),
     secondary = GuideAccentSecondary,
     background = Color(0xFFF7F7FA),
     onBackground = Color(0xFF111114),
-    surface = Color(0xFFFFFFFF),
+    surface = Color(0xFFFFFFFF).copy(alpha = 0.82f),
     onSurface = Color(0xFF111114),
-    surfaceVariant = Color(0xFFECECF2),
+    surfaceVariant = Color(0xFFECECF2).copy(alpha = 0.72f),
     onSurfaceVariant = Color(0xFF5B5B66),
     outline = Color(0xFFD6D6DF),
     error = GuideDanger,

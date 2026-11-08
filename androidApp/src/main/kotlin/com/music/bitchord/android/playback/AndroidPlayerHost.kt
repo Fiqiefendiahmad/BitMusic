@@ -6,8 +6,11 @@ import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -19,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsSource
@@ -122,20 +127,64 @@ internal class AndroidPlayerHost(context: Context) : PlayerHost {
         }
         val selected by selectedOutput.collectAsState()
         return remember(revision, selected) {
-            listedDevices = manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).toList()
-            listedDevices.mapIndexed { index, device ->
+            val seen = LinkedHashSet<String>()
+            val available = manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                .asSequence()
+                .filter(::isRelevantOutput)
+                // Earpiece is for calls; showing it as a media output is confusing/unusable.
+                .filterNot { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
+                .filter { device ->
+                    val key = "${kindOf(device.type)}:${device.productName.toString().trim().lowercase()}"
+                        .ifBlank { "${kindOf(device.type)}:${device.type}" }
+                    seen.add(key)
+                }
+                .toList()
+            listedDevices = available
+            val activeIndex = selected.coerceIn(0, (available.lastIndex).coerceAtLeast(0))
+            available.mapIndexed { index, device ->
+                val kind = kindOf(device.type)
                 AudioOutputDevice(
                     id = index,
-                    name = device.productName.toString().ifBlank { kindOf(device.type).name.lowercase() },
-                    kind = kindOf(device.type),
-                    isActive = index == selected,
+                    name = device.productName.toString().trim().ifBlank { displayName(device.type) },
+                    kind = kind,
+                    isActive = available.size == 1 || index == activeIndex,
                 )
             }
         }
     }
 
+    private fun isRelevantOutput(device: AudioDeviceInfo): Boolean = when (device.type) {
+        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER,
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+        AudioDeviceInfo.TYPE_WIRED_HEADSET,
+        AudioDeviceInfo.TYPE_USB_DEVICE,
+        AudioDeviceInfo.TYPE_USB_HEADSET,
+        AudioDeviceInfo.TYPE_USB_ACCESSORY,
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+        AudioDeviceInfo.TYPE_HDMI,
+        AudioDeviceInfo.TYPE_HDMI_ARC,
+        AudioDeviceInfo.TYPE_HDMI_EARC,
+        AudioDeviceInfo.TYPE_LINE_ANALOG,
+        AudioDeviceInfo.TYPE_LINE_DIGITAL,
+        AudioDeviceInfo.TYPE_DOCK,
+        -> true
+        else -> false
+    }
+
+    private fun displayName(type: Int): String = when (kindOf(type)) {
+        AudioOutputKind.PHONE -> "Phone speaker"
+        AudioOutputKind.WIRED -> "Wired headphones"
+        AudioOutputKind.USB -> "USB audio"
+        AudioOutputKind.BLUETOOTH -> "Bluetooth"
+        AudioOutputKind.HDMI -> "HDMI"
+        AudioOutputKind.OTHER -> "Audio output"
+    }
+
+    override val audioOutputPickerAvailable: Boolean = false
+
     @Composable
-    override fun rememberOutputPicker(onOpen: () -> Unit): () -> Unit = onOpen
+    override fun rememberOutputPicker(onOpen: () -> Unit): () -> Unit = { }
 
     override fun selectAudioOutput(id: Int?) {
         if (id == null || id !in listedDevices.indices) return
@@ -157,7 +206,7 @@ internal class AndroidPlayerHost(context: Context) : PlayerHost {
         },
     ).asStateFlow()
 
-    override val party: StateFlow<PartyUi> = MutableStateFlow(PartyUi()).asStateFlow()
+    override val party: StateFlow<PartyUi> = MutableStateFlow(PartyUi(supported = false)).asStateFlow()
 
     override suspend fun translateLyrics(
         trackId: String,
@@ -187,13 +236,37 @@ internal class AndroidPlayerHost(context: Context) : PlayerHost {
 
     @Composable
     override fun AudioPipelineDialog(hazeState: HazeState, isPlaying: Boolean, onDismiss: () -> Unit) {
+        val format by outputFormat.collectAsState()
         AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("Audio pipeline") },
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp,
+            shape = RoundedCornerShape(24.dp),
+            title = {
+                Text(
+                    "Audio pipeline",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
             text = {
-                Column {
-                    Text("ExoPlayer → Android audio")
-                    Text(outputFormat.value.summary)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Playback uses the shared resolver and streams through ExoPlayer on Android.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
+                    )
+                    Text(
+                        "Output: ${format.summary}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        "Device switching is handled by the system audio picker.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             },
             confirmButton = {
@@ -234,9 +307,13 @@ internal class AndroidPlayerSettings(
         runCatching { AudioQuality.valueOf(prefs.getString(KEY_AUDIO_QUALITY, "HIGH") ?: "HIGH") }
             .getOrDefault(AudioQuality.HIGH)
 
+    private fun savedCacheSizeMb(): Int =
+        prefs.getInt(KEY_CACHE_SIZE_MB, 512).coerceIn(64, 4096)
+
     override val animatedCanvas = MutableStateFlow(prefs.getBoolean("animated_canvas", true))
     override val audioQualityCellular = MutableStateFlow(savedQuality())
     override val audioQualityWifi = MutableStateFlow(savedQuality())
+    val cacheSizeMb = MutableStateFlow(savedCacheSizeMb())
     override val canvasOverCellular = MutableStateFlow(prefs.getBoolean("canvas_over_cellular", false))
     override val fullBleedArtwork = MutableStateFlow(prefs.getBoolean("full_bleed_artwork", true))
     override val hideSongStatus = MutableStateFlow(prefs.getBoolean("hide_song_status", false))
@@ -309,6 +386,13 @@ internal class AndroidPlayerSettings(
         StreamResolver.maxKbps = { value.maxKbps }
     }
 
+    fun setCacheSizeMb(value: Int) {
+        val clamped = value.coerceIn(64, 4096)
+        cacheSizeMb.value = clamped
+        prefs.edit().putInt(KEY_CACHE_SIZE_MB, clamped).apply()
+        // Applied to ExoPlayer disk cache on next player init/app restart.
+    }
+
     private fun saveBoolean(
         flow: MutableStateFlow<Boolean>,
         key: String,
@@ -323,5 +407,6 @@ internal class AndroidPlayerSettings(
         const val KEY_LYRICS_OFFSET = "lyrics_offset_ms"
         const val KEY_AUDIO_QUALITY = "audio_quality"
         const val KEY_STREAM_MAX_KBPS = "stream_max_kbps"
+        const val KEY_CACHE_SIZE_MB = "player_cache_mb"
     }
 }
