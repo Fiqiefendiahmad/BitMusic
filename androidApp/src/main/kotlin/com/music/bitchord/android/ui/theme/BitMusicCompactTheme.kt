@@ -27,27 +27,50 @@ object CompactDimens {
     val CornerRadiusSmall = 10.dp
 }
 
+// Design tokens from the supplied mobile UI guide (dark Apple-Music-inspired).
+private val GuideBackground = Color(0xFF08080B)
+private val GuideSurface = Color(0xFF17171D)
+private val GuideSurfaceElevated = Color(0xFF24242C)
+private val GuideTextPrimary = Color(0xFFFFFFFF)
+private val GuideTextSecondary = Color(0xFFA6A6B0)
+private val GuideAccent = Color(0xFFF52B83)
+private val GuideAccentSecondary = Color(0xFF8B5CF6)
+private val GuideSeparator = Color(0xFF303039)
+private val GuideSuccess = Color(0xFF35C879)
+private val GuideDanger = Color(0xFFFF5A67)
+
 private val BitDark = darkColorScheme(
-    primary = Color(0xFF6EE7B7),
-    onPrimary = Color(0xFF003826),
-    primaryContainer = Color(0xFF005138),
-    secondary = Color(0xFFB4CCBE),
-    background = Color(0xFF0F1512),
-    onBackground = Color(0xFFDEE4DF),
-    surface = Color(0xFF151C18),
-    onSurface = Color(0xFFDEE4DF),
-    surfaceVariant = Color(0xFF3F4943),
-    onSurfaceVariant = Color(0xFFBFC9C1),
-    outline = Color(0xFF89938C),
+    primary = GuideAccent,
+    onPrimary = GuideTextPrimary,
+    primaryContainer = GuideSurfaceElevated,
+    onPrimaryContainer = GuideTextPrimary,
+    secondary = GuideAccentSecondary,
+    onSecondary = GuideTextPrimary,
+    background = GuideBackground,
+    onBackground = GuideTextPrimary,
+    surface = GuideSurface,
+    onSurface = GuideTextPrimary,
+    surfaceVariant = GuideSurfaceElevated,
+    onSurfaceVariant = GuideTextSecondary,
+    outline = GuideSeparator,
+    error = GuideDanger,
+    onError = GuideTextPrimary,
 )
 
 private val BitLight = lightColorScheme(
-    primary = Color(0xFF006C4B),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFF89F8C7),
-    background = Color(0xFFF6FBF6),
-    surface = Color(0xFFF6FBF6),
-    surfaceVariant = Color(0xFFDBE5DD),
+    primary = GuideAccent,
+    onPrimary = GuideTextPrimary,
+    primaryContainer = Color(0xFFFFD9E2),
+    onPrimaryContainer = Color(0xFF3E001D),
+    secondary = GuideAccentSecondary,
+    background = Color(0xFFF7F7FA),
+    onBackground = Color(0xFF111114),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF111114),
+    surfaceVariant = Color(0xFFECECF2),
+    onSurfaceVariant = Color(0xFF5B5B66),
+    outline = Color(0xFFD6D6DF),
+    error = GuideDanger,
 )
 
 @Composable

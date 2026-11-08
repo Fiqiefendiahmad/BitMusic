@@ -3,9 +3,11 @@ package com.music.bitchord.android.ui
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryMusic
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.music.bitchord.data.model.Song
@@ -21,6 +23,7 @@ enum class CompactDestination(
     Home("home", "Home", Icons.Filled.Home, Icons.Outlined.Home),
     Search("search", "Search", Icons.Filled.Search, Icons.Outlined.Search),
     Library("library", "Library", Icons.Filled.LibraryMusic, Icons.Outlined.LibraryMusic),
+    Profile("profile", "Profile", Icons.Filled.Person, Icons.Outlined.Person),
 }
 
 /** Everything the compact player chrome draws, sourced from the real ExoPlayer. */

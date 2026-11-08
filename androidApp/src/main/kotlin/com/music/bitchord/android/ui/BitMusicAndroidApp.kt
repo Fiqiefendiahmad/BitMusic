@@ -38,6 +38,7 @@ import com.music.bitchord.android.ui.player.CompactMiniPlayer
 import com.music.bitchord.android.ui.player.PlayerSettingsSheet
 import com.music.bitchord.android.ui.screens.CompactCollectionScreen
 import com.music.bitchord.android.ui.screens.CompactLibraryScreen
+import com.music.bitchord.android.ui.screens.CompactProfileScreen
 import com.music.bitchord.android.ui.screens.CompactSearchScreen
 import com.music.bitchord.android.ui.theme.CompactDimens
 import com.music.bitchord.data.model.LikeStatus
@@ -171,6 +172,10 @@ fun BitMusicAndroidApp(
                     onRetry = viewModel::refreshLibrary,
                     onTrackClick = { song -> viewModel.play(song, viewModel.libraryTracks); showNowPlaying = true },
                     compact = isCompactWidth,
+                )
+                CompactDestination.Profile -> CompactProfileScreen(
+                    modifier = contentModifier,
+                    onOpenPlayerSettings = { showSettings = true },
                 )
             }
         }
