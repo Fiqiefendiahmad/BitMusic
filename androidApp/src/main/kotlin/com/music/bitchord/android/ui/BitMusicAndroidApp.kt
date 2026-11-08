@@ -7,18 +7,23 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
@@ -31,12 +36,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.music.bitchord.android.ui.player.CompactMiniPlayer
 import com.music.bitchord.android.ui.player.PlayerSettingsSheet
-import com.music.bitchord.android.ui.screens.CompactHomeScreen
+import com.music.bitchord.android.ui.screens.CompactCollectionScreen
 import com.music.bitchord.android.ui.screens.CompactLibraryScreen
 import com.music.bitchord.android.ui.screens.CompactSearchScreen
 import com.music.bitchord.android.ui.theme.CompactDimens
 import com.music.bitchord.data.model.LikeStatus
+import com.music.bitchord.data.model.UiState
 import com.music.bitchord.ui.player.NowPlayingScreen
+import com.music.bitchord.ui.screens.HomeScreen
 
 /**
  * Android shell redesigned for small screens:
@@ -47,6 +54,7 @@ import com.music.bitchord.ui.player.NowPlayingScreen
  *
  * All tracks and playback come from the shared BitMusic data layer.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BitMusicAndroidApp(
     windowSizeClass: WindowSizeClass,
@@ -57,10 +65,18 @@ fun BitMusicAndroidApp(
     var showNowPlaying by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     val playerState = viewModel.playerState
+    val collectionOpen = viewModel.collectionLoading ||
+        viewModel.collection != null ||
+        viewModel.collectionError != null
+
+    // A collection opened from Home sits above the feed; back returns to it.
+    BackHandler(enabled = collectionOpen) {
+        viewModel.closeCollection()
+    }
 
     // The player screen owns its own back layers (lyrics, queue, drawers); when
     // none is open, back closes the player rather than leaving the app.
-    BackHandler(enabled = showNowPlaying && playerState.current != null) {
+    BackHandler(enabled = !collectionOpen && showNowPlaying && playerState.current != null) {
         showNowPlaying = false
     }
 
@@ -99,15 +115,43 @@ fun BitMusicAndroidApp(
                 .imePadding()
 
             when (destination) {
-                CompactDestination.Home -> CompactHomeScreen(
-                    modifier = contentModifier,
-                    tracks = viewModel.homeTracks,
-                    isLoading = viewModel.isLoadingHome,
-                    error = viewModel.homeError,
-                    onRetry = viewModel::refreshHome,
-                    onTrackClick = { song -> viewModel.play(song, viewModel.homeTracks); showNowPlaying = true },
-                    compact = isCompactWidth,
-                )
+                CompactDestination.Home -> if (collectionOpen) {
+                    CompactCollectionScreen(
+                        modifier = contentModifier,
+                        title = viewModel.collectionTitle,
+                        songs = viewModel.collection?.songs.orEmpty(),
+                        isLoading = viewModel.collectionLoading,
+                        error = viewModel.collectionError,
+                        onBack = viewModel::closeCollection,
+                        onRetry = viewModel::retryCollection,
+                        onSongClick = { song ->
+                            viewModel.playCollectionSong(song)
+                            showNowPlaying = true
+                        },
+                    )
+                } else {
+                    HomeScreen(
+                        state = viewModel.homeState,
+                        listState = rememberLazyListState(),
+                        onItemClick = { item, _ ->
+                            if (item.videoId != null) showNowPlaying = true
+                            viewModel.openShelfItem(item)
+                        },
+                        onRetry = viewModel::refreshHome,
+                        refreshing = viewModel.isLoadingHome &&
+                            viewModel.homeState is UiState.Success,
+                        onRefresh = viewModel::refreshHome,
+                        pullState = rememberPullToRefreshState(),
+                        modifier = contentModifier.statusBarsPadding(),
+                        contentPadding = PaddingValues(bottom = 24.dp),
+                        title = null,
+                        signedIn = false,
+                        currentSong = playerState.current,
+                        isPlaying = playerState.isPlaying,
+                        onLoadMore = viewModel::loadMoreHome,
+                        loadingMore = viewModel.isLoadingMoreHome,
+                    )
+                }
                 CompactDestination.Search -> CompactSearchScreen(
                     modifier = contentModifier,
                     query = viewModel.searchQuery,

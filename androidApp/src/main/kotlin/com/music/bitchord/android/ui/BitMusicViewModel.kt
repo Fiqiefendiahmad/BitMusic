@@ -7,12 +7,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.music.bitchord.android.data.Collection
 import com.music.bitchord.android.data.MusicRepository
+import com.music.bitchord.android.data.playableSongs
+import com.music.bitchord.android.data.toSong
 import com.music.bitchord.android.playback.AndroidPlaybackController
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsRepository
 import com.music.bitchord.data.lyrics.LyricsSource
+import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.UiState
 import com.music.bitchord.playback.PlaybackPosition
 import com.music.bitchord.ui.LyricsProviderState
 import kotlinx.coroutines.Job
@@ -43,8 +49,27 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
         },
     )
 
-    var homeTracks by mutableStateOf<List<Song>>(emptyList())
+    var homeState by mutableStateOf<UiState<List<HomeShelf>>>(UiState.Loading)
         private set
+    var homeContinuation by mutableStateOf<String?>(null)
+        private set
+    var isLoadingMoreHome by mutableStateOf(false)
+        private set
+    var collection by mutableStateOf<Collection?>(null)
+        private set
+    var collectionTitle by mutableStateOf("")
+        private set
+    var collectionBrowseId by mutableStateOf<String?>(null)
+        private set
+    var collectionLoading by mutableStateOf(false)
+        private set
+    var collectionError by mutableStateOf<String?>(null)
+        private set
+
+    /** Home's playable cards in shelf order; the shared page still draws the shelves. */
+    val homeTracks: List<Song>
+        get() = (homeState as? UiState.Success)?.data.orEmpty().playableSongs()
+
     var libraryTracks by mutableStateOf<List<Song>>(emptyList())
         private set
     var searchResults by mutableStateOf<List<Song>>(emptyList())
@@ -140,11 +165,83 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             isLoadingHome = true
             homeError = null
+            if (homeState !is UiState.Success) homeState = UiState.Loading
             repository.home()
-                .onSuccess { homeTracks = it }
-                .onFailure { homeError = it.message ?: "Could not load the home feed" }
+                .onSuccess { feed ->
+                    homeState = UiState.Success(feed.shelves)
+                    homeContinuation = feed.continuation
+                }
+                .onFailure { error ->
+                    val message = error.message ?: "Could not load the home feed"
+                    homeError = message
+                    if (homeState !is UiState.Success) homeState = UiState.Error(message)
+                }
             isLoadingHome = false
         }
+    }
+
+    fun loadMoreHome() {
+        val token = homeContinuation ?: return
+        if (isLoadingMoreHome) return
+        viewModelScope.launch {
+            isLoadingMoreHome = true
+            repository.moreHome(token)
+                .onSuccess { feed ->
+                    val current = (homeState as? UiState.Success)?.data.orEmpty()
+                    val titles = current.map { it.title }.toSet()
+                    homeState = UiState.Success(
+                        current + feed.shelves.filterNot { it.title in titles },
+                    )
+                    homeContinuation = feed.continuation
+                }
+                .onFailure { homeError = it.message ?: "Could not load more of the home feed" }
+            isLoadingMoreHome = false
+        }
+    }
+
+    /** Opens a home card: a track plays, an album or playlist opens its real track list. */
+    fun openShelfItem(item: ShelfItem) {
+        val videoId = item.videoId
+        if (videoId != null) {
+            val song = item.toSong() ?: return
+            play(song, homeTracks)
+        } else {
+            val browseId = item.browseId ?: return
+            openCollection(browseId, item.title)
+        }
+    }
+
+    fun openCollection(browseId: String, title: String) {
+        viewModelScope.launch {
+            collection = null
+            collectionTitle = title
+            collectionBrowseId = browseId
+            collectionError = null
+            collectionLoading = true
+            repository.browse(browseId, title)
+                .onSuccess {
+                    collection = it
+                    collectionTitle = it.title
+                }
+                .onFailure { collectionError = it.message ?: "Could not open this collection" }
+            collectionLoading = false
+        }
+    }
+
+    fun retryCollection() {
+        val browseId = collectionBrowseId ?: return
+        openCollection(browseId, collectionTitle)
+    }
+
+    fun closeCollection() {
+        collection = null
+        collectionBrowseId = null
+        collectionError = null
+        collectionLoading = false
+    }
+
+    fun playCollectionSong(song: Song) {
+        play(song, collection?.songs.orEmpty())
     }
 
     fun refreshLibrary() {

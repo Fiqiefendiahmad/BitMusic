@@ -88,6 +88,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // The shared resolver keeps NewPipe as its failsafe; without this the
+    // Android runtime hits NoClassDefFoundError before it can resolve a URL.
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.3")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

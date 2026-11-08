@@ -26,6 +26,9 @@ class AndroidPlaybackController(
     private val onError: (String) -> Unit,
 ) {
     private val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+        // The resolver's per-client User-Agent must survive; ExoPlayer's own
+        // default would overwrite it and the CDN would answer 403.
+        .setUserAgent(null)
         .setAllowCrossProtocolRedirects(true)
         .setConnectTimeoutMs(15_000)
         .setReadTimeoutMs(30_000)
