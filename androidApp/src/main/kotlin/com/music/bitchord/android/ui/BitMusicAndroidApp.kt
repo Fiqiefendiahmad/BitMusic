@@ -1,12 +1,23 @@
 package com.music.bitchord.android.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -36,9 +47,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.music.bitchord.android.LogExporter
@@ -53,6 +70,13 @@ import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.model.UiState
 import com.music.bitchord.ui.player.NowPlayingScreen
 import com.music.bitchord.ui.screens.HomeScreen
+import dev.chrisbanes.haze.ExperimentalHazeApi
+import androidx.compose.runtime.remember
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 
 /**
  * Android shell redesigned for small screens:
@@ -74,6 +98,7 @@ fun BitMusicAndroidApp(
     var showNowPlaying by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     val playerState = viewModel.playerState
+    val hazeState = remember { HazeState() }
     val context = LocalContext.current
     val collectionOpen = viewModel.collectionLoading ||
         viewModel.collection != null ||
@@ -101,7 +126,8 @@ fun BitMusicAndroidApp(
                         MaterialTheme.colorScheme.background,
                     ),
                 ),
-            ),
+            )
+            .hazeSource(hazeState),
     ) {
         Scaffold(
             containerColor = Color.Transparent,
@@ -124,6 +150,7 @@ fun BitMusicAndroidApp(
                             CompactBottomBar(
                                 selected = destination,
                                 onSelect = { destination = it },
+                                hazeState = hazeState,
                             )
                         }
                     }
@@ -274,31 +301,98 @@ fun BitMusicAndroidApp(
     }
 }
 
+@OptIn(ExperimentalHazeApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun CompactBottomBar(
     selected: CompactDestination,
     onSelect: (CompactDestination) -> Unit,
+    hazeState: HazeState,
 ) {
-    NavigationBar(
-        modifier = Modifier.height(CompactDimens.BottomNavHeight),
-        containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        windowInsets = WindowInsets.navigationBars,
+    val haptic = LocalHapticFeedback.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        CompactDestination.entries.forEach { dest ->
-            val isSelected = dest == selected
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = { onSelect(dest) },
-                alwaysShowLabel = false,
-                icon = {
-                    Icon(
-                        if (isSelected) dest.selectedIcon else dest.unselectedIcon,
-                        contentDescription = dest.label,
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-                label = { Text(dest.label, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
+        Row(
+            modifier = Modifier
+                .height(56.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .hazeEffect(
+                    state = hazeState,
+                    style = HazeStyle(
+                        backgroundColor = MaterialTheme.colorScheme.surface,
+                        tint = HazeTint(MaterialTheme.colorScheme.surface.copy(alpha = 0.35f)),
+                        blurRadius = 24.dp,
+                    ),
+                )
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.42f))
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f),
+                    shape = RoundedCornerShape(28.dp),
+                )
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            for (dest in CompactDestination.entries) {
+                CompactNavItem(
+                    dest = dest,
+                    isSelected = dest == selected,
+                    onSelect = onSelect,
+                    haptic = haptic,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CompactNavItem(
+    dest: CompactDestination,
+    isSelected: Boolean,
+    onSelect: (CompactDestination) -> Unit,
+    haptic: HapticFeedback,
+) {
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 1.12f else 1f,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "nav-scale",
+    )
+    val selectedColor = MaterialTheme.colorScheme.primary
+    val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val iconTint by animateColorAsState(
+        targetValue = if (isSelected) selectedColor else unselectedColor,
+        animationSpec = tween<Color>(durationMillis = 220),
+        label = "nav-tint",
+    )
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onSelect(dest)
+            }
+            .padding(vertical = 6.dp),
+    ) {
+        Icon(
+            imageVector = if (isSelected) dest.selectedIcon else dest.unselectedIcon,
+            contentDescription = dest.label,
+            tint = iconTint,
+            modifier = Modifier.size(22.dp).scale(scale),
+        )
+        AnimatedVisibility(visible = isSelected) {
+            Text(
+                text = dest.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = iconTint,
+                maxLines = 1,
             )
         }
     }
