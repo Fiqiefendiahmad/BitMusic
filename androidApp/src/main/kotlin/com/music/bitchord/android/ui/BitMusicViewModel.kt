@@ -40,7 +40,7 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
 
     private val playback = AndroidPlaybackController(
         context = application,
-        onIsPlayingChanged = { isPlaying = it },
+        onPlayingChanged = { isPlaying = it },
         onBufferingChanged = { isBuffering = it },
         onEnded = { skipNext(auto = true) },
         onError = { message ->

@@ -20,7 +20,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
  */
 class AndroidPlaybackController(
     context: Context,
-    private val onIsPlayingChanged: (Boolean) -> Unit,
+    private val onPlayingChanged: (Boolean) -> Unit,
     private val onBufferingChanged: (Boolean) -> Unit,
     private val onEnded: () -> Unit,
     private val onError: (String) -> Unit,
@@ -47,7 +47,7 @@ class AndroidPlaybackController(
         .apply {
             addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    onIsPlayingChanged(isPlaying)
+                    onPlayingChanged(isPlaying)
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
