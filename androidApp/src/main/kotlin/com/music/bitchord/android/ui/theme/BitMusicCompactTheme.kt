@@ -18,9 +18,9 @@ object CompactDimens {
     val ItemSpacing = 10.dp
     val SectionSpacing = 20.dp
     val MinTouchTarget = 48.dp
-    val MiniPlayerHeight = 68.dp
-    val BottomNavHeight = 64.dp
-    val ArtworkSmall = 52.dp
+    val MiniPlayerHeight = 64.dp
+    val BottomNavHeight = 52.dp
+    val ArtworkSmall = 44.dp
     val ArtworkMedium = 72.dp
     val ArtworkNowPlaying = 320.dp
     val CornerRadius = 14.dp

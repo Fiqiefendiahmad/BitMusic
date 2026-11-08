@@ -49,6 +49,7 @@ object AndroidPlatform {
                 'I' -> android.util.Log.i(tag, message)
                 else -> android.util.Log.d(tag, message)
             }
+            LogExporter.append(application, level, tag, message, error)
         }
 
         Innertube.appLanguage = { Locale.getDefault().toLanguageTag() }
