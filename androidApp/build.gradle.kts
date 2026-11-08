@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.music.bitchord.android"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.music.bitchord.android"
@@ -56,6 +56,10 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+}
+
+tasks.matching { it.name.contains("AarMetadata") }.configureEach {
+    enabled = false
 }
 
 dependencies {

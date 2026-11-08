@@ -69,7 +69,7 @@ kotlin {
 
 android {
     namespace = "com.music.bitchord.shared"
-    compileSdk = 37
+    compileSdk = 36
     defaultConfig {
         minSdk = 26
     }
