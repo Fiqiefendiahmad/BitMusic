@@ -1,42 +1,39 @@
 package com.music.bitchord.android.ui.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.music.bitchord.android.ui.UiTrack
+import com.music.bitchord.android.ui.components.TrackArtwork
 import com.music.bitchord.android.ui.theme.CompactDimens
+import com.music.bitchord.data.model.Song
 
 @Composable
 fun CompactHomeScreen(
-    tracks: List<UiTrack>,
-    onTrackClick: (UiTrack) -> Unit,
+    tracks: List<Song>,
+    isLoading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
+    onTrackClick: (Song) -> Unit,
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -54,24 +51,41 @@ fun CompactHomeScreen(
             Column(Modifier.statusBarsPadding().padding(bottom = 8.dp)) {
                 Text("BitMusic", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Small-screen Android redesign",
+                    "Your YouTube Music feed",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        item {
-            Text("Quick picks", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
-        }
-        items(tracks, key = { it.id }) { track ->
-            TrackRow(track = track, onClick = { onTrackClick(track) })
+        if (isLoading) {
+            item {
+                Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+        } else if (error != null) {
+            item {
+                Column {
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = onRetry) { Text("Retry") }
+                }
+            }
+        } else if (tracks.isEmpty()) {
+            item { Text("Nothing here yet", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        } else {
+            item {
+                Text("Quick picks", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+            }
+            items(tracks, key = { it.videoId }) { track ->
+                TrackRow(track = track, onClick = { onTrackClick(track) })
+            }
         }
     }
 }
 
 @Composable
 internal fun TrackRow(
-    track: UiTrack,
+    track: Song,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -89,27 +103,24 @@ internal fun TrackRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(CompactDimens.ArtworkMedium)
-                    .clip(RoundedCornerShape(CompactDimens.CornerRadiusSmall))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-            }
+            TrackArtwork(
+                url = track.thumbnailUrl,
+                modifier = Modifier.size(CompactDimens.ArtworkMedium),
+            )
             Column(Modifier.weight(1f)) {
                 Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "${track.artist}${track.album?.let { " • $it" } ?: ""}",
+                    track.artist,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(track.source, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text("YouTube", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
-            Text(track.durationLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            track.durationText?.let {
+                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

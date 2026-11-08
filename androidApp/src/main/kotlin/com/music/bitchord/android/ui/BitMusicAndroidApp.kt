@@ -26,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.music.bitchord.android.ui.player.CompactMiniPlayer
 import com.music.bitchord.android.ui.player.CompactNowPlayingScreen
 import com.music.bitchord.android.ui.screens.CompactHomeScreen
@@ -39,25 +40,18 @@ import com.music.bitchord.android.ui.theme.CompactDimens
  * - Persistent mini-player above nav
  * - Full-screen now playing overlay for portrait phones
  * - Single-column, touch-friendly content layouts
+ *
+ * All tracks and playback come from the shared BitMusic data layer.
  */
 @Composable
-fun BitMusicAndroidApp(windowSizeClass: WindowSizeClass) {
+fun BitMusicAndroidApp(
+    windowSizeClass: WindowSizeClass,
+    viewModel: BitMusicViewModel = viewModel(),
+) {
     val isCompactWidth = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Compact
     var destination by rememberSaveable { mutableStateOf(CompactDestination.Home) }
-    var playerState by rememberSaveable(stateSaver = PlayerStateSaver) {
-        mutableStateOf(PlayerUiState(current = SampleData.tracks.first(), queue = SampleData.tracks))
-    }
     var showNowPlaying by rememberSaveable { mutableStateOf(false) }
-
-    val onSelectTrack: (UiTrack) -> Unit = { track ->
-        playerState = playerState.copy(
-            current = track,
-            isPlaying = true,
-            progress = 0f,
-            queue = listOf(track) + SampleData.tracks.filterNot { it.id == track.id },
-        )
-        showNowPlaying = true
-    }
+    val playerState = viewModel.playerState
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(
@@ -73,7 +67,7 @@ fun BitMusicAndroidApp(windowSizeClass: WindowSizeClass) {
                         ) {
                             CompactMiniPlayer(
                                 state = playerState,
-                                onPlayPause = { playerState = playerState.copy(isPlaying = !playerState.isPlaying) },
+                                onPlayPause = viewModel::togglePlayPause,
                                 onOpen = { showNowPlaying = true },
                             )
                         }
@@ -96,19 +90,30 @@ fun BitMusicAndroidApp(windowSizeClass: WindowSizeClass) {
             when (destination) {
                 CompactDestination.Home -> CompactHomeScreen(
                     modifier = contentModifier,
-                    tracks = SampleData.tracks,
-                    onTrackClick = onSelectTrack,
+                    tracks = viewModel.homeTracks,
+                    isLoading = viewModel.isLoadingHome,
+                    error = viewModel.homeError,
+                    onRetry = viewModel::refreshHome,
+                    onTrackClick = { song -> viewModel.play(song, viewModel.homeTracks); showNowPlaying = true },
                     compact = isCompactWidth,
                 )
                 CompactDestination.Search -> CompactSearchScreen(
                     modifier = contentModifier,
-                    onTrackClick = onSelectTrack,
+                    query = viewModel.searchQuery,
+                    results = viewModel.searchResults,
+                    isSearching = viewModel.isSearching,
+                    error = viewModel.searchError,
+                    onQueryChange = viewModel::onSearchQueryChange,
+                    onTrackClick = { song -> viewModel.play(song, viewModel.searchResults); showNowPlaying = true },
                     compact = isCompactWidth,
                 )
                 CompactDestination.Library -> CompactLibraryScreen(
                     modifier = contentModifier,
-                    tracks = SampleData.tracks,
-                    onTrackClick = onSelectTrack,
+                    tracks = viewModel.libraryTracks,
+                    isLoading = viewModel.isLoadingLibrary,
+                    error = viewModel.libraryError,
+                    onRetry = viewModel::refreshLibrary,
+                    onTrackClick = { song -> viewModel.play(song, viewModel.libraryTracks); showNowPlaying = true },
                     compact = isCompactWidth,
                 )
             }
@@ -121,10 +126,13 @@ fun BitMusicAndroidApp(windowSizeClass: WindowSizeClass) {
         ) {
             CompactNowPlayingScreen(
                 state = playerState,
+                error = viewModel.playbackError,
                 onBack = { showNowPlaying = false },
-                onPlayPause = { playerState = playerState.copy(isPlaying = !playerState.isPlaying) },
-                onSeek = { progress -> playerState = playerState.copy(progress = progress.coerceIn(0f, 1f)) },
-                onSelectTrack = onSelectTrack,
+                onPlayPause = viewModel::togglePlayPause,
+                onSeek = viewModel::seekTo,
+                onNext = { viewModel.skipNext() },
+                onPrevious = viewModel::skipPrevious,
+                onSelectTrack = { song -> viewModel.play(song, viewModel.queue) },
             )
         }
     }
@@ -151,24 +159,3 @@ private fun CompactBottomBar(
         }
     }
 }
-
-/** Minimal saver for prototype state; production should use ViewModel + parcelable/domain models. */
-private val PlayerStateSaver = androidx.compose.runtime.saveable.Saver<PlayerUiState, String>(
-    save = { state ->
-        listOf(
-            state.current?.id.orEmpty(),
-            state.isPlaying.toString(),
-            state.progress.toString(),
-        ).joinToString("|")
-    },
-    restore = { saved ->
-        val parts = saved.split("|")
-        val current = SampleData.tracks.find { it.id == parts.getOrNull(0) }
-        PlayerUiState(
-            current = current,
-            isPlaying = parts.getOrNull(1)?.toBooleanStrictOrNull() ?: false,
-            progress = parts.getOrNull(2)?.toFloatOrNull() ?: 0f,
-            queue = SampleData.tracks,
-        )
-    },
-)

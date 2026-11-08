@@ -8,6 +8,8 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.music.bitchord.data.model.Song
+import java.util.Locale
 
 /** Top-level destinations optimized for bottom navigation on small screens. */
 enum class CompactDestination(
@@ -21,28 +23,27 @@ enum class CompactDestination(
     Library("library", "Library", Icons.Filled.LibraryMusic, Icons.Outlined.LibraryMusic),
 }
 
-data class UiTrack(
-    val id: String,
-    val title: String,
-    val artist: String,
-    val album: String? = null,
-    val durationLabel: String = "0:00",
-    val source: String = "YouTube",
-)
-
+/** Everything the compact player chrome draws, sourced from the real ExoPlayer. */
 data class PlayerUiState(
-    val current: UiTrack? = null,
+    val current: Song? = null,
     val isPlaying: Boolean = false,
     val progress: Float = 0f,
-    val queue: List<UiTrack> = emptyList(),
+    val queue: List<Song> = emptyList(),
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
+    val isBuffering: Boolean = false,
 )
 
-object SampleData {
-    val tracks = listOf(
-        UiTrack("1", "Midnight Drive", "Aurora Lane", "Neon Hours", "3:42", "YouTube"),
-        UiTrack("2", "Small Screen", "BitMusic", "Android Redesign", "2:58", "Local"),
-        UiTrack("3", "Signal Flow", "Mono Circuit", "Patch Notes", "4:11", "SoundCloud"),
-        UiTrack("4", "Paper Planes", "Daylight Echo", "City Tape", "3:05", "Audius"),
-        UiTrack("5", "Low Latency", "Cavacore", "Desktop Engine", "5:20", "YouTube"),
-    )
+/** `m:ss`, with hours only when the track actually has them. */
+internal fun formatTime(milliseconds: Long): String {
+    if (milliseconds <= 0) return "0:00"
+    val totalSeconds = milliseconds / 1_000
+    val hours = totalSeconds / 3_600
+    val minutes = (totalSeconds % 3_600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.US, "%d:%02d", minutes, seconds)
+    }
 }

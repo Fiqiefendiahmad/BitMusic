@@ -11,33 +11,29 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.music.bitchord.android.ui.SampleData
-import com.music.bitchord.android.ui.UiTrack
 import com.music.bitchord.android.ui.theme.CompactDimens
+import com.music.bitchord.data.model.Song
 
 @Composable
 fun CompactSearchScreen(
-    onTrackClick: (UiTrack) -> Unit,
+    query: String,
+    results: List<Song>,
+    isSearching: Boolean,
+    error: String?,
+    onQueryChange: (String) -> Unit,
+    onTrackClick: (Song) -> Unit,
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
-    val results = if (query.isBlank()) SampleData.tracks else SampleData.tracks.filter {
-        it.title.contains(query, ignoreCase = true) || it.artist.contains(query, ignoreCase = true)
-    }
-
     Column(modifier = modifier.fillMaxSize()) {
         Column(
             Modifier
@@ -50,7 +46,7 @@ fun CompactSearchScreen(
             Text("Search", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             OutlinedTextField(
                 value = query,
-                onValueChange = { query = it },
+                onValueChange = onQueryChange,
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 placeholder = { Text("Songs, artists, albums") },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
@@ -65,11 +61,25 @@ fun CompactSearchScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(CompactDimens.ItemSpacing),
         ) {
-            if (results.isEmpty()) {
-                item { Text("No results", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
-            items(results, key = { it.id }) { track ->
-                TrackRow(track = track, onClick = { onTrackClick(track) })
+            when {
+                isSearching -> item {
+                    CircularProgressIndicator(Modifier.padding(24.dp))
+                }
+                error != null -> item {
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                }
+                query.isBlank() -> item {
+                    Text(
+                        "Search YouTube Music",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                results.isEmpty() -> item {
+                    Text("No results", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                else -> items(results, key = { it.videoId }) { track ->
+                    TrackRow(track = track, onClick = { onTrackClick(track) })
+                }
             }
         }
     }

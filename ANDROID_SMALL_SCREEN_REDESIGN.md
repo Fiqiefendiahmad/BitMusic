@@ -21,7 +21,7 @@ Or with GitHub CLI: `gh repo fork 1999AZZAR/BitMusic --clone=false` then set rem
 
 ## What Changed
 
-- **`androidApp/`** — new Android application module (Compose, Material 3, minSdk 26, target/compile 36).
+- **`androidApp/`** — new Android application module (Compose, Material 3, minSdk 26, target 36, compile 37 — the shared InnerTubeX Android artifact requires compileSdk 37).
 - **Small-screen-first UI redesign** (portrait/compact width focus):
   - **Bottom navigation** (`Home`, `Search`, `Library`) for thumb reach.
   - **Persistent mini-player** above navigation with progress, artwork, play/pause, and tap-to-expand.
@@ -42,20 +42,23 @@ Or with GitHub CLI: `gh repo fork 1999AZZAR/BitMusic --clone=false` then set rem
 
 ## Build Requirements
 
-- Android SDK (set `sdk.dir` in `local.properties`, not committed)
+- Android SDK with **platform 37** and build-tools 36+ (set `sdk.dir` in `local.properties`, not committed)
 - JDK 17+ (Android module uses Java/Kotlin 17; desktop modules remain as configured)
 - Gradle wrapper: `./gradlew :androidApp:assembleDebug`
 
-> This environment may not include the Android SDK. The module is scaffolded and ready to build on a machine with Android Studio / SDK installed.
+If the full multi-project configuration fights the desktop toolchain on a headless machine, temporarily include only `:shared` and `:androidApp` in `settings.gradle.kts`, build, then restore.
 
-## Integration Path (Next Steps)
+## Shared Data / Playback Integration
 
-The redesign UI is currently a **standalone prototype** with sample data to validate small-screen UX. To fully integrate with BitMusic’s shared playback/data stack:
+The redesign is **not** a sample-data prototype. It reuses the existing BitMusic data layer:
 
-1. Add Android targets to `:shared`/UI modules or create a KMP `androidMain` source set strategy.
-2. Replace `SampleData`/`PlayerUiState` wiring with the existing player host, stream resolver, and library repositories.
-3. Add media session/notification playback service for background audio.
-4. Validate on physical small-screen devices (e.g., 360×640dp to 412×915dp) and add accessibility tests.
+- `:shared` now has an Android target that reuses `src/jvmSharedMain` through a `jvmAndroid` hierarchy, so the same `Innertube`, `YtMusicRepository`, `InnerTubeXResolver`, and `StreamResolver` code runs on Android and desktop.
+- `BitMusicApplication` installs the shared config: SharedPreferences-backed InnerTubeX config store, device locale, and `StreamResolver` bitrate ceiling.
+- `MusicRepository` maps real Home/Search/Library results to `Song` rows; search calls `YtMusicRepository.search(query, SearchFilter.SONGS)`.
+- `AndroidPlaybackController` resolves each track through `StreamResolver.resolve(videoId)` and plays the returned URL in Media3 ExoPlayer with the issuing client's media headers.
+- `BitMusicViewModel` owns queue, play/pause, seek, next/previous, progress, buffering, and playback errors.
+
+Remaining production work: optional media-session/notification service for background audio, Android YouTube sign-in if the library should show a signed-in account, and physical-device verification at 360×640dp to 412×915dp.
 
 ## License
 
