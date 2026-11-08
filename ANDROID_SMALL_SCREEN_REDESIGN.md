@@ -21,7 +21,8 @@ Or with GitHub CLI: `gh repo fork 1999AZZAR/BitMusic --clone=false` then set rem
 
 ## What Changed
 
-- **`androidApp/`** — new Android application module (Compose, Material 3, minSdk 26, target 36, compile 37 — the shared InnerTubeX Android artifact requires compileSdk 37).
+- **`androidApp/`** — new Android application module (Compose, Material 3, minSdk 26, target 36, compile 36).
+- **`shared/`**, **`sharedUi/`** — shared cross-platform modules with Android target (compileSdk 36).
 - **Small-screen-first UI redesign** (portrait/compact width focus):
   - **Bottom navigation** (`Home`, `Search`, `Library`) for thumb reach.
   - **Persistent mini-player** above navigation with progress, artwork, play/pause, and tap-to-expand.
