@@ -16,9 +16,14 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "BitMusic"
-// Desktop-only application: Android phone (app) and Android TV (tv) modules
-// have been removed. BitMusic now targets Linux, Windows and macOS only.
+
+// Desktop modules (original targets)
 include(":shared")
 include(":sharedUi")
 include(":desktopUi")
 include(":desktopApp")
+
+// Android small-screen redesign (fork addition). Requires Android SDK + local.properties sdk.dir.
+if (file("androidApp").isDirectory) {
+    include(":androidApp")
+}
