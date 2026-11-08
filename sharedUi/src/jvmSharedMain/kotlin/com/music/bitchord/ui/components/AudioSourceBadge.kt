@@ -35,6 +35,7 @@ fun AudioSourceBadge(
     if (!showYouTube && origin == AudioSourceOrigin.YOUTUBE) return
 
     val brandColor = when (origin) {
+        AudioSourceOrigin.AUDIUS -> Color(0xFF7C3AED)
         AudioSourceOrigin.SOUNDCLOUD -> Color(0xFFFF5500)
         AudioSourceOrigin.LOCAL -> Color(0xFF30D158)
         AudioSourceOrigin.JIOSAAVN -> Color(0xFF00BFA5)

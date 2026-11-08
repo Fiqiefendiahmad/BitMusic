@@ -2,13 +2,19 @@ package com.music.bitchord.android.ui
 
 import android.app.Application
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.music.bitchord.android.data.MusicRepository
 import com.music.bitchord.android.playback.AndroidPlaybackController
+import com.music.bitchord.data.lyrics.LyricLine
+import com.music.bitchord.data.lyrics.LyricsRepository
+import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.playback.PlaybackPosition
+import com.music.bitchord.ui.LyricsProviderState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -24,6 +30,7 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
     private val repository = MusicRepository()
     private var resolveJob: Job? = null
     private var searchJob: Job? = null
+    private var lyricsJob: Job? = null
 
     private val playback = AndroidPlaybackController(
         context = application,
@@ -74,6 +81,32 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
     var durationMs by mutableStateOf(0L)
         private set
 
+    /** The shared player's playhead object, kept out of composition-wide state. */
+    val playbackPosition = PlaybackPosition()
+
+    var repeatMode by mutableIntStateOf(0) // RepeatModes.OFF
+        private set
+    var shuffleEnabled by mutableStateOf(false)
+        private set
+    var autoplayEnabled by mutableStateOf(false)
+        private set
+
+    var lyrics by mutableStateOf<List<LyricLine>?>(null)
+        private set
+    var lyricsSource by mutableStateOf<LyricsSource?>(null)
+        private set
+    var lyricsUnavailable by mutableStateOf(false)
+        private set
+    var lyricsProviderStates by mutableStateOf<Map<LyricsSource, LyricsProviderState>>(emptyMap())
+        private set
+
+    val queueIndex: Int
+        get() = queue.indexOfFirst { it.videoId == current?.videoId }
+    val hasPrevious: Boolean
+        get() = queue.size > 1 || queueIndex > 0
+    val hasNext: Boolean
+        get() = queue.size > 1 || (queueIndex >= 0 && queueIndex < queue.lastIndex)
+
     val playerState: PlayerUiState
         get() = PlayerUiState(
             current = current,
@@ -93,6 +126,10 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
                 if (playback.isPlaying) {
                     positionMs = playback.positionMs
                     playback.durationMs.takeIf { it > 0 }?.let { durationMs = it }
+                    playbackPosition.advancing = true
+                    playbackPosition.report(positionMs)
+                } else {
+                    playbackPosition.advancing = false
                 }
                 delay(PROGRESS_TICK_MS)
             }
@@ -153,8 +190,11 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
         current = song
         positionMs = 0L
         durationMs = parseDurationMs(song.durationText)
+        playbackPosition.report(0L)
+        playbackPosition.seeks++
         playbackError = null
         load(song)
+        loadLyrics(song)
     }
 
     fun togglePlayPause() {
@@ -178,13 +218,17 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
         val song = current ?: return
         val list = queue
         val index = list.indexOfFirst { it.videoId == song.videoId }
-        val next = list.getOrNull(index + 1)
-            ?: if (!auto) list.firstOrNull() else null
+        val next = when {
+            shuffleEnabled && list.size > 1 -> list.filterNot { it.videoId == song.videoId }.random()
+            else -> list.getOrNull(index + 1)
+                ?: if (!auto || repeatMode == REPEAT_ALL || autoplayEnabled) list.firstOrNull() else null
+        }
         if (next != null) {
             play(next, list)
         } else {
             playback.pause()
             positionMs = durationMs
+            playbackPosition.report(durationMs)
         }
     }
 
@@ -201,13 +245,108 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun seekTo(fraction: Float) {
-        val target = (durationMs * fraction.coerceIn(0f, 1f)).toLong()
+        seekToMs((durationMs * fraction.coerceIn(0f, 1f)).toLong())
+    }
+
+    fun seekToMs(targetMs: Long) {
+        val target = targetMs.coerceIn(0L, durationMs.coerceAtLeast(0L))
         positionMs = target
+        playbackPosition.report(target)
+        playbackPosition.seeks++
         playback.seekTo(target)
+    }
+
+    fun toggleShuffle() {
+        shuffleEnabled = !shuffleEnabled
+    }
+
+    fun toggleAutoplay() {
+        autoplayEnabled = !autoplayEnabled
+    }
+
+    fun cycleRepeat() {
+        repeatMode = when (repeatMode) {
+            REPEAT_ALL -> REPEAT_ONE
+            REPEAT_ONE -> REPEAT_OFF
+            else -> REPEAT_ALL
+        }
+        playback.player.repeatMode = if (repeatMode == REPEAT_ONE) {
+            androidx.media3.common.Player.REPEAT_MODE_ONE
+        } else {
+            androidx.media3.common.Player.REPEAT_MODE_OFF
+        }
+    }
+
+    fun jumpTo(index: Int) {
+        queue.getOrNull(index)?.let { play(it, queue) }
+    }
+
+    fun removeFromQueue(index: Int) {
+        if (index !in queue.indices) return
+        val removed = queue[index]
+        val next = queue.toMutableList().apply { removeAt(index) }
+        if (removed.videoId == current?.videoId) {
+            val replacement = next.getOrNull(index.coerceAtMost(next.lastIndex))
+            if (replacement != null) {
+                queue = next
+                play(replacement, next)
+            } else {
+                playback.stop()
+                current = null
+                queue = emptyList()
+            }
+        } else {
+            queue = next
+        }
+    }
+
+    fun moveInQueue(from: Int, to: Int) {
+        if (from !in queue.indices || to !in queue.indices || from == to) return
+        queue = queue.toMutableList().apply { add(to, removeAt(from)) }
+    }
+
+    fun clearQueue() {
+        queue = current?.let { listOf(it) } ?: emptyList()
+    }
+
+    fun selectLyricsProvider(source: LyricsSource) {
+        current?.let { loadLyrics(it, only = source) }
     }
 
     fun dismissPlaybackError() {
         playbackError = null
+    }
+
+    private fun loadLyrics(song: Song, only: LyricsSource? = null) {
+        lyricsJob?.cancel()
+        lyrics = null
+        lyricsSource = null
+        lyricsUnavailable = false
+        lyricsProviderStates = LyricsSource.offered.associateWith { LyricsProviderState.NOT_FETCHED }
+        lyricsJob = viewModelScope.launch {
+            val found = LyricsRepository.lyrics(
+                videoId = song.videoId,
+                title = song.title,
+                artist = song.artist,
+                durationMs = durationMs,
+                album = song.albumName,
+                sources = (only?.let { setOf(it) } ?: LyricsSource.offered.toSet()),
+                order = only?.let { listOf(it) } ?: LyricsSource.offered,
+                prioritizeSyllableSync = true,
+                onSourceStarted = { source ->
+                    lyricsProviderStates = lyricsProviderStates + (source to LyricsProviderState.FETCHING)
+                },
+                onSourceResult = { source, result ->
+                    lyricsProviderStates = lyricsProviderStates +
+                        (source to if (result != null) LyricsProviderState.FOUND else LyricsProviderState.NOT_FOUND)
+                },
+            )
+            if (current?.videoId == song.videoId) {
+                lyrics = found?.lines
+                lyricsSource = found?.source
+                lyricsUnavailable = found == null
+            }
+        }
     }
 
     private fun load(song: Song) {
@@ -234,6 +373,7 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
     override fun onCleared() {
         resolveJob?.cancel()
         searchJob?.cancel()
+        lyricsJob?.cancel()
         playback.release()
         super.onCleared()
     }
@@ -242,6 +382,9 @@ class BitMusicViewModel(application: Application) : AndroidViewModel(application
         const val PROGRESS_TICK_MS = 500L
         const val SEARCH_DEBOUNCE_MS = 350L
         const val RESTART_THRESHOLD_MS = 3_000L
+        const val REPEAT_OFF = 0
+        const val REPEAT_ONE = 1
+        const val REPEAT_ALL = 2
     }
 }
 

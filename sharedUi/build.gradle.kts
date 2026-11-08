@@ -31,6 +31,7 @@ val CMP_DESKTOP =
 
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
+    id("com.android.library")
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
@@ -42,8 +43,22 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_17)
         }
     }
+    androidTarget {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
+    }
 
-    applyDefaultHierarchyTemplate()
+    // The phone and the desktop share this tree; the Android app is the phone
+    // build it was originally written for.
+    applyDefaultHierarchyTemplate {
+        common {
+            group("jvmAndroid") {
+                withJvm()
+                withAndroidTarget()
+            }
+        }
+    }
 
     compilerOptions {
         freeCompilerArgs.add("-Xexpect-actual-classes")
@@ -54,6 +69,7 @@ kotlin {
             dependsOn(commonMain.get())
         }
         jvmMain.get().dependsOn(jvmSharedMain)
+        androidMain.get().dependsOn(jvmSharedMain)
 
         commonMain.dependencies {
             api(project(":shared"))
@@ -74,10 +90,26 @@ kotlin {
         jvmMain.dependencies {
             api("org.jetbrains.compose.ui:ui-desktop:$CMP_DESKTOP")
         }
+        androidMain.dependencies {
+            implementation("androidx.core:core-ktx:1.15.0")
+            implementation("androidx.activity:activity-compose:1.9.3")
+        }
         jvmTest.dependencies {
             implementation(kotlin("test"))
             implementation("junit:junit:4.13.2")
         }
+    }
+}
+
+android {
+    namespace = "com.music.bitchord.sharedui"
+    compileSdk = 37
+    defaultConfig {
+        minSdk = 26
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 

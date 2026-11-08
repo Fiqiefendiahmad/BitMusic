@@ -7,6 +7,9 @@ import com.music.bitchord.data.DebugLog
 import com.music.bitchord.data.innertube.Innertube
 import com.music.bitchord.data.innertube.InnerTubeXResolver
 import com.music.bitchord.data.innertube.StreamResolver
+import com.music.bitchord.android.playback.AndroidPlayerHost
+import com.music.bitchord.ui.AppUi
+import com.music.bitchord.ui.player.PlayerPlatform
 import java.util.Locale
 
 /**
@@ -48,6 +51,9 @@ object AndroidPlatform {
             poTokenProvider = null,
             prewarm = true,
         )
+
+        PlayerPlatform.install(AndroidPlayerHost(application))
+        AppUi.install(AndroidAppUiHost(application))
     }
 
     private const val PREFS_NAME = "bitchord"

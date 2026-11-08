@@ -3,7 +3,9 @@ package com.music.bitchord.android.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -28,11 +30,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.music.bitchord.android.ui.player.CompactMiniPlayer
-import com.music.bitchord.android.ui.player.CompactNowPlayingScreen
+import com.music.bitchord.android.ui.player.PlayerSettingsSheet
 import com.music.bitchord.android.ui.screens.CompactHomeScreen
 import com.music.bitchord.android.ui.screens.CompactLibraryScreen
 import com.music.bitchord.android.ui.screens.CompactSearchScreen
 import com.music.bitchord.android.ui.theme.CompactDimens
+import com.music.bitchord.data.model.LikeStatus
+import com.music.bitchord.ui.player.NowPlayingScreen
 
 /**
  * Android shell redesigned for small screens:
@@ -51,7 +55,14 @@ fun BitMusicAndroidApp(
     val isCompactWidth = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Compact
     var destination by rememberSaveable { mutableStateOf(CompactDestination.Home) }
     var showNowPlaying by rememberSaveable { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
     val playerState = viewModel.playerState
+
+    // The player screen owns its own back layers (lyrics, queue, drawers); when
+    // none is open, back closes the player rather than leaving the app.
+    BackHandler(enabled = showNowPlaying && playerState.current != null) {
+        showNowPlaying = false
+    }
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(
@@ -124,16 +135,60 @@ fun BitMusicAndroidApp(
             enter = slideInVertically(initialOffsetY = { it }),
             exit = slideOutVertically(targetOffsetY = { it }),
         ) {
-            CompactNowPlayingScreen(
-                state = playerState,
-                error = viewModel.playbackError,
-                onBack = { showNowPlaying = false },
-                onPlayPause = viewModel::togglePlayPause,
-                onSeek = viewModel::seekTo,
-                onNext = { viewModel.skipNext() },
-                onPrevious = viewModel::skipPrevious,
-                onSelectTrack = { song -> viewModel.play(song, viewModel.queue) },
-            )
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val song = playerState.current ?: return@BoxWithConstraints
+                NowPlayingScreen(
+                    song = song,
+                    isPlaying = playerState.isPlaying,
+                    isLoading = playerState.isBuffering,
+                    audioVersionSwitching = false,
+                    qualityUpgraded = false,
+                    position = viewModel.playbackPosition,
+                    durationMs = playerState.durationMs,
+                    queue = playerState.queue,
+                    queueIndex = viewModel.queueIndex,
+                    hasPrevious = viewModel.hasPrevious,
+                    hasNext = viewModel.hasNext,
+                    repeatMode = viewModel.repeatMode,
+                    shuffleEnabled = viewModel.shuffleEnabled,
+                    autoplayEnabled = viewModel.autoplayEnabled,
+                    signedIn = false,
+                    accountName = null,
+                    likeStatus = LikeStatus.INDIFFERENT,
+                    onToggleLike = {},
+                    onPlayPause = viewModel::togglePlayPause,
+                    onNext = { viewModel.skipNext() },
+                    onPrevious = viewModel::skipPrevious,
+                    onBlockedControl = {},
+                    onSeek = viewModel::seekToMs,
+                    onSeekFraction = viewModel::seekTo,
+                    onToggleShuffle = viewModel::toggleShuffle,
+                    onCycleRepeat = viewModel::cycleRepeat,
+                    onToggleAutoplay = viewModel::toggleAutoplay,
+                    onJumpTo = viewModel::jumpTo,
+                    onRemoveFromQueue = viewModel::removeFromQueue,
+                    onMoveInQueue = viewModel::moveInQueue,
+                    onClearQueue = viewModel::clearQueue,
+                    onOpenMenu = { showSettings = true },
+                    onOpenAlbum = {},
+                    onOpenArtist = { _, _ -> },
+                    onOpenPlaybackSource = {},
+                    onListenTogether = {},
+                    lyrics = viewModel.lyrics,
+                    lyricsSource = viewModel.lyricsSource,
+                    lyricsProviderStates = viewModel.lyricsProviderStates,
+                    onSelectLyricsProvider = viewModel::selectLyricsProvider,
+                    lyricsUnavailable = viewModel.lyricsUnavailable,
+                    lyricsOffsetOpen = false,
+                    onDismissLyricsOffset = {},
+                    windowWidth = maxWidth,
+                    windowHeight = maxHeight,
+                )
+            }
+        }
+
+        if (showSettings) {
+            PlayerSettingsSheet(onDismiss = { showSettings = false })
         }
     }
 }
