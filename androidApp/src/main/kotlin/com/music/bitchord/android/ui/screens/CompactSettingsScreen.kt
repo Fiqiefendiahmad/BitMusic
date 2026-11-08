@@ -38,8 +38,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.PowerManager
 import androidx.compose.foundation.clickable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.android.auth.AndroidYouTubeAuth
@@ -234,6 +236,54 @@ fun CompactSettingsScreen(
             }
             SettingSwitch("Reduce dynamic blur", "Trade the haze for flat surfaces", reduceBlur) {
                 settings.setReduceDynamicBlur(it)
+            }
+        } }
+
+        item { SectionCard("Battery & background playback") {
+            val pm = remember(context) { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
+            var isIgnoring by remember { mutableStateOf(pm?.isIgnoringBatteryOptimizations(context.packageName) == true) }
+
+            androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+                isIgnoring = pm?.isIgnoringBatteryOptimizations(context.packageName) == true
+                onPauseOrDispose { }
+            }
+
+            Text(
+                text = if (isIgnoring) "Battery optimization: Unrestricted" else "Battery optimization: Optimized (may sleep in background)",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = if (isIgnoring) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = if (isIgnoring) {
+                    "BitMusic is allowed to keep playing continuously when screen is locked or idle."
+                } else {
+                    "On Samsung devices, battery optimization can pause audio when the screen is turned off. Set to Unrestricted to prevent Samsung from putting BitMusic to sleep."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = {
+                    val intent = if (!isIgnoring) {
+                        Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = Uri.parse("package:${context.packageName}")
+                        }
+                    } else {
+                        Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    }
+                    runCatching { context.startActivity(intent) }.onFailure {
+                        val fallback = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.parse("package:${context.packageName}")
+                        }
+                        runCatching { context.startActivity(fallback) }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (isIgnoring) "Open Battery Settings" else "Request Unrestricted Battery")
             }
         } }
 

@@ -102,6 +102,7 @@ object PlaybackHolder {
                     /* handleAudioFocus = */ true,
                 )
                 .setHandleAudioBecomingNoisy(true)
+                .setWakeMode(C.WAKE_MODE_NETWORK)
                 .build()
             val forwarded = object : ForwardingPlayer(exo) {
                 override fun isCommandAvailable(command: Int): Boolean =
