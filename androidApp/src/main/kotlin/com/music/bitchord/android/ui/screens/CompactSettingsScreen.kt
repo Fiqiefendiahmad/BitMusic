@@ -41,7 +41,9 @@ import androidx.compose.ui.unit.dp
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
+import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.android.auth.AndroidYouTubeAuth
@@ -322,6 +324,68 @@ fun CompactSettingsScreen(
                 }
             }
         } }
+
+        item {
+            SectionCard("Battery & background") {
+                val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+                val pkg = context.packageName
+                val ignoring = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    pm.isIgnoringBatteryOptimizations(pkg)
+                } else {
+                    true
+                }
+                Text(
+                    text = if (ignoring) {
+                        "Battery optimization is disabled for this app (recommended for uninterrupted playback)."
+                    } else {
+                        "Battery optimization may restrict background playback on some devices (especially Samsung). If playback stops when the screen is off, allow unrestricted/background playback."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                if (!ignoring) {
+                    OutlinedButton(
+                        onClick = {
+                            runCatching {
+                                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                    data = Uri.parse("package:$pkg")
+                                }
+                                context.startActivity(intent)
+                            }.onFailure {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.parse("package:$pkg")
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Disable battery optimization (allow background)")
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+                OutlinedButton(
+                    onClick = {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.parse("package:$pkg")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Open app battery settings")
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "On Samsung: Settings → Apps → BitMusic → Battery → set to 'Unrestricted' and ensure it's not in 'Sleeping apps'.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
         item {
             SectionCard("Storage & cache") {
